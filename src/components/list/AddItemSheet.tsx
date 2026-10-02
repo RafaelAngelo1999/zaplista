@@ -1,7 +1,10 @@
 import * as React from 'react';
+import { Mic } from 'lucide-react';
 import { Button, Field, Input, Select, Sheet } from '@/components/ui/primitives';
 import { QtyStepper } from '@/components/list/QtyStepper';
 import { AISLES, CATEGORIES, UNITS, UNIT_NAMES } from '@/lib/taxonomy';
+import { useSpeechInput } from '@/hooks/useSpeechInput';
+import { cn } from '@/lib/cn';
 import type { NewItemInput } from '@/store/lists';
 import type { ProductHistory, Unit } from '@/types';
 import { productKey } from '@/lib/history';
@@ -23,6 +26,10 @@ export function AddItemSheet({
   const [aisle, setAisle] = React.useState('Outros');
   const [category, setCategory] = React.useState('Outros');
   const [touchedTaxonomy, setTouchedTaxonomy] = React.useState(false);
+
+  const voice = useSpeechInput((transcript) => {
+    setName(transcript.charAt(0).toUpperCase() + transcript.slice(1));
+  });
 
   const reset = () => {
     setName('');
@@ -76,17 +83,35 @@ export function AddItemSheet({
     >
       <div className="space-y-4">
         <Field label="Descrição" htmlFor="add-name">
-          <Input
-            id="add-name"
-            autoFocus
-            autoComplete="off"
-            placeholder="Ex.: Café moído 500g"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submit();
-            }}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="add-name"
+              autoFocus
+              autoComplete="off"
+              placeholder="Ex.: Café moído 500g"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') submit();
+              }}
+              className="flex-1"
+            />
+            {voice.supported ? (
+              <button
+                type="button"
+                aria-label={voice.listening ? 'Parar ditado' : 'Ditar por voz'}
+                onClick={() => (voice.listening ? voice.stop() : voice.start())}
+                className={cn(
+                  'grid size-11 shrink-0 place-items-center rounded-[var(--radius-control)] border transition-colors',
+                  voice.listening
+                    ? 'border-accent bg-accent text-accent-fg'
+                    : 'border-border bg-surface text-text-muted hover:bg-surface-2',
+                )}
+              >
+                <Mic size={18} className={voice.listening ? 'animate-pulse' : undefined} />
+              </button>
+            ) : null}
+          </div>
         </Field>
 
         {suggestions.length ? (

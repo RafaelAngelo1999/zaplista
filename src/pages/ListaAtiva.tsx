@@ -31,16 +31,18 @@ import { ItemRow } from '@/components/list/ItemRow';
 import { GroupHeader } from '@/components/list/GroupHeader';
 import { ItemSheet } from '@/components/list/ItemSheet';
 import { AddItemSheet } from '@/components/list/AddItemSheet';
+import { ListMetaSheet } from '@/components/list/ListMetaSheet';
+import { RecurringSuggestions } from '@/components/list/RecurringSuggestions';
 import { useToast } from '@/components/ui/Toast';
 import { InstallHeaderButton } from '@/components/ui/InstallPrompt';
-import { useShareSync } from '@/hooks/useShareSync';
 import { useActiveList, useAllLists, useLists } from '@/store/lists';
 import { useSettings } from '@/store/settings';
+import { useSyncStatus } from '@/store/sync';
 import { isSharingAvailable } from '@/lib/supabase';
-import { buildHistory, comparePrice, productKey } from '@/lib/history';
-import { filterItems, groupItems, statsOf } from '@/lib/sort';
+import { buildHistory, comparePrice, productKey, recurringNotInList } from '@/lib/history';
+import { aislePosition, filterItems, groupItems, statsOf } from '@/lib/sort';
 import { pluralize } from '@/lib/format';
-import type { Item, SortMode } from '@/types';
+import type { Item, ProductHistory, SortMode } from '@/types';
 
 const ShareSheet = React.lazy(() =>
   import('@/components/list/ShareSheet').then((m) => ({ default: m.ShareSheet })),
@@ -61,6 +63,7 @@ export function ListaAtiva() {
   const setSortMode = useSettings((state) => state.setSortMode);
   const trackPrices = useSettings((state) => state.trackPrices);
   const userName = useSettings((state) => state.userName);
+  const aisleOrder = useSettings((state) => state.aisleOrder);
 
   const toggleItem = useLists((state) => state.toggleItem);
   const updateItem = useLists((state) => state.updateItem);
@@ -68,18 +71,35 @@ export function ListaAtiva() {
   const restoreItem = useLists((state) => state.restoreItem);
   const addItem = useLists((state) => state.addItem);
   const completeList = useLists((state) => state.completeList);
+  const reopenList = useLists((state) => state.reopenList);
+  const renameList = useLists((state) => state.renameList);
+  const setMarket = useLists((state) => state.setMarket);
 
   const [query, setQuery] = React.useState('');
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
+  const [editingMeta, setEditingMeta] = React.useState(false);
   const [showDone, setShowDone] = React.useState(false);
+  const [dismissedRecurring, setDismissedRecurring] = React.useState<Set<string>>(new Set());
 
   const history = React.useMemo(() => buildHistory(allLists), [allLists]);
 
-  const syncStatus = useShareSync(list);
+  const syncStatus = useSyncStatus();
   const shared = Boolean(list?.remoteId);
+
+  React.useEffect(() => {
+    setDismissedRecurring(new Set());
+  }, [list?.id]);
+
+  const recurring = React.useMemo(
+    () =>
+      list
+        ? recurringNotInList(history, list.items).filter((entry) => !dismissedRecurring.has(entry.key))
+        : [],
+    [history, list, dismissedRecurring],
+  );
 
   if (!list) {
     return (
@@ -122,7 +142,7 @@ export function ListaAtiva() {
   const visible = filterItems(list.items, query, false);
   const pending = visible.filter((item) => !item.checked);
   const done = visible.filter((item) => item.checked);
-  const groups = groupItems(pending, sortMode);
+  const groups = groupItems(pending, sortMode, aisleOrder);
 
   const handleRemove = (item: Item) => {
     const index = list.items.findIndex((candidate) => candidate.id === item.id);
@@ -133,14 +153,50 @@ export function ListaAtiva() {
     });
   };
 
+  const handleComplete = () => {
+    completeList(list.id);
+    toast.show('Compra encerrada e guardada no histórico', {
+      label: 'Desfazer',
+      run: () => reopenList(list.id),
+    });
+  };
+
+  const handleAddRecurring = (entry: ProductHistory) => {
+    addItem(list.id, {
+      name: entry.label,
+      qty: 1,
+      unit: entry.prices[0]?.unit ?? 'un',
+      aisle: entry.aisle,
+      category: entry.category,
+    });
+  };
+
   return (
     <>
       <PageHeader
         title={list.title}
+        onTitleTap={() => setEditingMeta(true)}
         subtitle={
           <span className="tnum">
             {stats.pending} {pluralize(stats.pending, 'item restante', 'itens restantes')}
             {stats.done > 0 ? ` · ${stats.done} no carrinho` : ''}
+            {list.market ? ` · ${list.market}` : ''}
+            {shared ? (
+              <span
+                className={cn(
+                  'ml-1.5 inline-flex items-center gap-1 font-medium',
+                  syncStatus.state === 'syncing' ? 'text-text-faint' : 'text-accent',
+                )}
+              >
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    syncStatus.state === 'syncing' ? 'animate-pulse bg-text-faint' : 'bg-accent',
+                  )}
+                />
+                {syncStatus.state === 'syncing' ? 'Sincronizando…' : 'Compartilhada'}
+              </span>
+            ) : null}
           </span>
         }
         action={
@@ -231,6 +287,12 @@ export function ListaAtiva() {
       </div>
 
       <div className="mt-3.5 space-y-3 px-3.5">
+        <RecurringSuggestions
+          items={recurring}
+          onAdd={handleAddRecurring}
+          onDismiss={(key) => setDismissedRecurring((current) => new Set(current).add(key))}
+        />
+
         {pending.length === 0 ? (
           <Card className="px-4 py-8 text-center">
             <CheckCheck size={22} className="mx-auto text-accent" />
@@ -243,15 +305,7 @@ export function ListaAtiva() {
                 : 'Todos os itens estão no carrinho.'}
             </p>
             {!query ? (
-              <Button
-                variant="primary"
-                size="md"
-                className="mt-4"
-                onClick={() => {
-                  completeList(list.id);
-                  toast.show('Compra encerrada e guardada no histórico');
-                }}
-              >
+              <Button variant="primary" size="md" className="mt-4" onClick={handleComplete}>
                 Encerrar compra
               </Button>
             ) : null}
@@ -264,8 +318,8 @@ export function ListaAtiva() {
                 done={group.done}
                 total={group.total}
                 index={
-                  sortMode === 'aisle' && group.items[0]?.aisleOrder !== 99
-                    ? group.items[0]?.aisleOrder
+                  sortMode === 'aisle' && group.label !== 'Outros'
+                    ? aislePosition(group.label, aisleOrder) + 1
                     : undefined
                 }
               />
@@ -331,16 +385,8 @@ export function ListaAtiva() {
           </Collapsible.Root>
         ) : null}
 
-        {pending.length > 0 && stats.done > 0 ? (
-          <Button
-            variant="ghost"
-            size="md"
-            className="w-full"
-            onClick={() => {
-              completeList(list.id);
-              toast.show('Compra encerrada e guardada no histórico');
-            }}
-          >
+        {pending.length > 0 ? (
+          <Button variant="ghost" size="md" className="w-full" onClick={handleComplete}>
             Encerrar compra com {stats.pending} {pluralize(stats.pending, 'item pendente', 'itens pendentes')}
           </Button>
         ) : null}
@@ -380,6 +426,16 @@ export function ListaAtiva() {
         }}
       />
 
+      <ListMetaSheet
+        list={list}
+        open={editingMeta}
+        onOpenChange={setEditingMeta}
+        onSave={(title, market) => {
+          renameList(list.id, title);
+          setMarket(list.id, market);
+        }}
+      />
+
       {isSharingAvailable() ? (
         <React.Suspense fallback={null}>
           <ShareSheet list={list} open={sharing} onOpenChange={setSharing} syncStatus={syncStatus} />
@@ -394,11 +450,13 @@ export function PageHeader({
   subtitle,
   action,
   children,
+  onTitleTap,
 }: {
   title: string;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
   children?: React.ReactNode;
+  onTitleTap?: () => void;
 }) {
   const ref = React.useRef<HTMLElement | null>(null);
 
@@ -423,7 +481,17 @@ export function PageHeader({
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[20px] font-semibold tracking-[-0.02em]">{title}</h1>
+          {onTitleTap ? (
+            <button
+              type="button"
+              onClick={onTitleTap}
+              className="block w-full truncate text-left text-[20px] font-semibold tracking-[-0.02em]"
+            >
+              {title}
+            </button>
+          ) : (
+            <h1 className="truncate text-[20px] font-semibold tracking-[-0.02em]">{title}</h1>
+          )}
           {subtitle ? <p className="mt-0.5 text-[13px] text-text-muted">{subtitle}</p> : null}
         </div>
         <InstallHeaderButton />

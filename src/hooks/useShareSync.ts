@@ -2,32 +2,45 @@ import * as React from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase, isSharingAvailable } from '@/lib/supabase';
 import { fetchShare, pushShare, type RemoteList } from '@/lib/share';
-import { mergeRemote } from '@/lib/merge';
+import { describeListChange, mergeRemote } from '@/lib/merge';
 import { useLists } from '@/store/lists';
+import { useSyncStatus } from '@/store/sync';
 import type { ShoppingList } from '@/types';
 
 export type SyncState = 'disabled' | 'idle' | 'syncing' | 'synced' | 'error';
 
 const PUSH_DEBOUNCE_MS = 900;
+const POLL_FALLBACK_MS = 8000;
 
-export function useShareSync(list: ShoppingList | null): { state: SyncState; error?: string } {
+export function useShareSync(
+  list: ShoppingList | null,
+  onRemoteUpdate?: (message: string) => void,
+): void {
   const applyRemote = useLists((s) => s.applyRemote);
+  const onRemoteUpdateRef = React.useRef(onRemoteUpdate);
+  onRemoteUpdateRef.current = onRemoteUpdate;
 
   const channelRef = React.useRef<RealtimeChannel | null>(null);
   const revisionRef = React.useRef(list?.revision ?? 0);
+  const itemsRef = React.useRef(list?.items ?? []);
   // Setado antes de adotar um estado remoto, para esse update não disparar um
   // push de volta — senão vira eco infinito entre as duas pontas.
   const skipNextPushRef = React.useRef(false);
   const pushTimerRef = React.useRef<number | null>(null);
 
-  const [status, setStatus] = React.useState<{ state: SyncState; error?: string }>({
-    state: isSharingAvailable() ? 'idle' : 'disabled',
-  });
+  const setStatus = React.useCallback((next: { state: SyncState; error?: string }) => {
+    useSyncStatus.setState(next);
+  }, []);
+
+  React.useEffect(() => {
+    setStatus({ state: isSharingAvailable() ? 'idle' : 'disabled' });
+  }, [setStatus]);
 
   const remoteId = list?.remoteId;
   const shareCode = list?.shareCode;
   const listId = list?.id;
   revisionRef.current = list?.revision ?? 0;
+  itemsRef.current = list?.items ?? [];
 
   React.useEffect(() => {
     if (!remoteId || !listId) return;
@@ -40,9 +53,11 @@ export function useShareSync(list: ShoppingList | null): { state: SyncState; err
         channel.on('broadcast', { event: 'sync' }, ({ payload }) => {
           const remote = payload as RemoteList;
           if (remote.revision <= revisionRef.current) return;
+          const message = describeListChange(itemsRef.current, remote.items);
           skipNextPushRef.current = true;
           applyRemote(listId, remote);
           setStatus({ state: 'synced' });
+          onRemoteUpdateRef.current?.(message);
         });
         channel.subscribe();
         channelRef.current = channel;
@@ -59,7 +74,7 @@ export function useShareSync(list: ShoppingList | null): { state: SyncState; err
         channelRef.current = null;
       }
     };
-  }, [remoteId, listId, applyRemote]);
+  }, [remoteId, listId, applyRemote, setStatus]);
 
   const itemsSignature = list ? JSON.stringify(list.items) : '';
 
@@ -98,7 +113,7 @@ export function useShareSync(list: ShoppingList | null): { state: SyncState; err
     return () => {
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current);
     };
-  }, [remoteId, shareCode, listId, itemsSignature, list?.title, applyRemote]);
+  }, [remoteId, shareCode, listId, itemsSignature, list?.title, applyRemote, setStatus]);
 
   React.useEffect(() => {
     if (!remoteId || !shareCode || !listId) return;
@@ -107,9 +122,11 @@ export function useShareSync(list: ShoppingList | null): { state: SyncState; err
       try {
         const remote = await fetchShare(shareCode);
         if (remote.revision > revisionRef.current) {
+          const message = describeListChange(itemsRef.current, remote.items);
           skipNextPushRef.current = true;
           applyRemote(listId, remote);
           setStatus({ state: 'synced' });
+          onRemoteUpdateRef.current?.(message);
         }
       } catch {}
     };
@@ -118,13 +135,21 @@ export function useShareSync(list: ShoppingList | null): { state: SyncState; err
       if (document.visibilityState === 'visible') void refetch();
     };
 
+    // O broadcast do Supabase Realtime é "best effort" (sem confirmação de
+    // entrega) — se o canal cair ou a assinatura não tiver completado a
+    // tempo, a outra ponta nunca fica sabendo. Esse polling é a rede de
+    // segurança que garante consistência mesmo com broadcast perdido,
+    // sem depender de trocar de aba ou perder conexão.
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refetch();
+    }, POLL_FALLBACK_MS);
+
     window.addEventListener('online', refetch);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
+      window.clearInterval(pollId);
       window.removeEventListener('online', refetch);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [remoteId, shareCode, listId, applyRemote]);
-
-  return status;
+  }, [remoteId, shareCode, listId, applyRemote, setStatus]);
 }

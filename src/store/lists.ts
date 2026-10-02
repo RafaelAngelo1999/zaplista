@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import { nanoid } from 'nanoid';
 import { applyMerge } from '@/lib/merge';
 import { aisleOrderOf } from '@/lib/taxonomy';
@@ -18,6 +19,8 @@ interface ListsState {
   completeList: (id: string) => void;
   reopenList: (id: string) => void;
   duplicateList: (id: string, options?: { onlyUnchecked?: boolean }) => string;
+  saveAsTemplate: (id: string, title?: string) => string;
+  useTemplate: (id: string) => string;
 
   importIntoActive: (items: Item[], mode: 'replace' | 'merge') => void;
 
@@ -65,6 +68,19 @@ function mapItems(
   return touch({ ...list, items: fn(list.items) });
 }
 
+function cloneItemsFresh(items: Item[], timestamp: string): Item[] {
+  return items.map((item) => ({
+    ...item,
+    id: nanoid(10),
+    checked: false,
+    checkedAt: undefined,
+    checkedBy: undefined,
+    price: undefined,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }));
+}
+
 export const useLists = create<ListsState>()(
   persist(
     (set, get) => ({
@@ -107,11 +123,14 @@ export const useLists = create<ListsState>()(
         })),
 
       completeList: (id) =>
-        set((state) => ({
-          lists: mapList(state.lists, id, (list) =>
+        set((state) => {
+          const lists = mapList(state.lists, id, (list) =>
             touch({ ...list, status: 'concluida', completedAt: now() }),
-          ),
-        })),
+          );
+          const activeId =
+            state.activeId === id ? (lists.find((l) => l.status === 'ativa')?.id ?? null) : state.activeId;
+          return { lists, activeId };
+        }),
 
       reopenList: (id) =>
         set((state) => ({
@@ -130,18 +149,32 @@ export const useLists = create<ListsState>()(
           ? source.items.filter((item) => !item.checked)
           : source.items;
 
-        const items: Item[] = picked.map((item) => ({
-          ...item,
-          id: nanoid(10),
-          checked: false,
-          checkedAt: undefined,
-          checkedBy: undefined,
-          price: undefined,
+        return get().createList(`${source.title} (cópia)`, cloneItemsFresh(picked, timestamp));
+      },
+
+      saveAsTemplate: (id, title) => {
+        const source = get().lists.find((list) => list.id === id);
+        if (!source) return '';
+
+        const timestamp = now();
+        const templateId = nanoid(10);
+        const template: ShoppingList = {
+          id: templateId,
+          title: title?.trim() || source.title,
+          status: 'modelo',
+          items: cloneItemsFresh(source.items, timestamp),
           createdAt: timestamp,
           updatedAt: timestamp,
-        }));
+        };
+        set((state) => ({ lists: [template, ...state.lists] }));
+        return templateId;
+      },
 
-        return get().createList(`${source.title} (cópia)`, items);
+      useTemplate: (id) => {
+        const source = get().lists.find((list) => list.id === id);
+        if (!source) return '';
+
+        return get().createList(source.title, cloneItemsFresh(source.items, now()));
       },
 
       importIntoActive: (items, mode) =>
@@ -313,4 +346,8 @@ export function useActiveList(): ShoppingList | null {
 
 export function useAllLists(): ShoppingList[] {
   return useLists((state) => state.lists);
+}
+
+export function useTemplates(): ShoppingList[] {
+  return useLists(useShallow((state) => state.lists.filter((list) => list.status === 'modelo')));
 }

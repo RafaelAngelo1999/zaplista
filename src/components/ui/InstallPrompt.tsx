@@ -21,18 +21,22 @@ function InstallSheetBody({ onInstalled }: { onInstalled: () => void }) {
   if (ios) {
     return (
       <ol className="space-y-3 text-[14px] text-text-muted">
-        <li className="flex items-center gap-2.5">
+        <li className="flex items-start gap-2.5">
           <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-[12px] font-semibold text-accent">
             1
           </span>
-          Toque no ícone de compartilhar <Share size={15} className="inline text-text" /> na barra
-          do Safari
+          <span>
+            Toque no ícone de compartilhar{' '}
+            <Share size={15} className="inline -translate-y-0.5 text-text" /> na barra do Safari
+          </span>
         </li>
-        <li className="flex items-center gap-2.5">
+        <li className="flex items-start gap-2.5">
           <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-[12px] font-semibold text-accent">
             2
           </span>
-          Escolha <strong className="font-semibold text-text">Adicionar à Tela de Início</strong>
+          <span>
+            Escolha <strong className="font-semibold text-text">Adicionar à Tela de Início</strong>
+          </span>
         </li>
       </ol>
     );

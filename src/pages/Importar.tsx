@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import {
   AlertTriangle,
@@ -27,6 +27,7 @@ export function Importar() {
   const activeList = useActiveList();
   const createList = useLists((state) => state.createList);
   const importIntoActive = useLists((state) => state.importIntoActive);
+  const [searchParams] = useSearchParams();
 
   const [raw, setRaw] = React.useState('');
   const [json, setJson] = React.useState('');
@@ -36,6 +37,14 @@ export function Importar() {
   const [error, setError] = React.useState<string | null>(null);
   const [repaired, setRepaired] = React.useState(false);
   const [truncated, setTruncated] = React.useState(false);
+
+  React.useEffect(() => {
+    const title = searchParams.get('title');
+    const text = searchParams.get('text');
+    const url = searchParams.get('url');
+    const shared = [title, text, url].filter(Boolean).join('\n').trim();
+    if (shared) setRaw((current) => current || shared);
+  }, [searchParams]);
 
   const prompt = short ? buildShortPrompt(raw) : buildPrompt(raw);
 

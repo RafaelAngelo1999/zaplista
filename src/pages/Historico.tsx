@@ -1,19 +1,29 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, History as HistoryIcon, Share2, Trash2, Undo2 } from 'lucide-react';
+import {
+  BookmarkPlus,
+  Check,
+  Copy,
+  History as HistoryIcon,
+  Play,
+  Share2,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 import { cn, copyToClipboard } from '@/lib/cn';
 import { AmountDisplay, Button, Card, Chip, EmptyState } from '@/components/ui/primitives';
 import { PageHeader } from '@/pages/ListaAtiva';
 import { useToast } from '@/components/ui/Toast';
-import { useAllLists, useLists } from '@/store/lists';
-import { statsOf } from '@/lib/sort';
-import { groupItems } from '@/lib/sort';
-import { fullDate, pluralize, timeAgo } from '@/lib/format';
-import { qtyLabel } from '@/lib/format';
+import { useAllLists, useLists, useTemplates } from '@/store/lists';
+import { useSettings } from '@/store/settings';
+import { statsOf, groupItems } from '@/lib/sort';
+import { fullDate, pluralize, timeAgo, qtyLabel } from '@/lib/format';
 import type { ShoppingList } from '@/types';
 
 export function Historico() {
   const lists = useAllLists();
+  const templates = useTemplates();
+  const aisleOrder = useSettings((state) => state.aisleOrder);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -21,11 +31,13 @@ export function Historico() {
   const deleteList = useLists((state) => state.deleteList);
   const duplicateList = useLists((state) => state.duplicateList);
   const reopenList = useLists((state) => state.reopenList);
+  const saveAsTemplate = useLists((state) => state.saveAsTemplate);
+  const useTemplateAction = useLists((state) => state.useTemplate);
 
   const [confirming, setConfirming] = React.useState<string | null>(null);
 
   const active = lists.filter((list) => list.status === 'ativa');
-  const finished = lists.filter((list) => list.status !== 'ativa');
+  const finished = lists.filter((list) => list.status === 'concluida' || list.status === 'arquivada');
 
   if (!lists.length) {
     return (
@@ -41,7 +53,7 @@ export function Historico() {
   }
 
   const shareAsText = async (list: ShoppingList) => {
-    const groups = groupItems(list.items, 'aisle');
+    const groups = groupItems(list.items, 'aisle', aisleOrder);
     const text = [
       `*${list.title}*`,
       '',
@@ -56,6 +68,11 @@ export function Historico() {
 
     const ok = await copyToClipboard(text.trim());
     toast.show(ok ? 'Lista copiada — cole no WhatsApp' : 'Não consegui copiar');
+  };
+
+  const handleSaveAsTemplate = (list: ShoppingList) => {
+    saveAsTemplate(list.id);
+    toast.show(`"${list.title}" salva como modelo`);
   };
 
   return (
@@ -84,6 +101,7 @@ export function Historico() {
                   navigate('/');
                 }}
                 onShare={() => shareAsText(list)}
+                onSaveAsTemplate={() => handleSaveAsTemplate(list)}
                 onDelete={() => {
                   if (confirming !== list.id) {
                     setConfirming(list.id);
@@ -93,6 +111,27 @@ export function Historico() {
                   deleteList(list.id);
                   setConfirming(null);
                   toast.show('Lista apagada');
+                }}
+              />
+            ))}
+          </section>
+        ) : null}
+
+        {templates.length ? (
+          <section className="space-y-2">
+            <p className="label px-1">Modelos</p>
+            {templates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onUse={() => {
+                  useTemplateAction(template.id);
+                  toast.show(`Nova lista criada a partir de "${template.title}"`);
+                  navigate('/');
+                }}
+                onDelete={() => {
+                  deleteList(template.id);
+                  toast.show('Modelo apagado');
                 }}
               />
             ))}
@@ -117,6 +156,7 @@ export function Historico() {
                   navigate('/');
                 }}
                 onShare={() => shareAsText(list)}
+                onSaveAsTemplate={() => handleSaveAsTemplate(list)}
                 onDelete={() => {
                   if (confirming !== list.id) {
                     setConfirming(list.id);
@@ -142,6 +182,7 @@ function ListCard({
   onOpen,
   onDuplicate,
   onShare,
+  onSaveAsTemplate,
   onDelete,
 }: {
   list: ShoppingList;
@@ -149,6 +190,7 @@ function ListCard({
   onOpen: () => void;
   onDuplicate: () => void;
   onShare: () => void;
+  onSaveAsTemplate: () => void;
   onDelete: () => void;
 }) {
   const stats = statsOf(list.items);
@@ -188,13 +230,50 @@ function ListCard({
       <div className="flex border-t border-border">
         <CardAction icon={finished ? <Undo2 size={15} /> : undefined} label={finished ? 'Reabrir' : 'Abrir'} onClick={onOpen} />
         <CardAction icon={<Copy size={15} />} label="Duplicar" onClick={onDuplicate} />
-        <CardAction icon={<Share2 size={15} />} label="Copiar" onClick={onShare} />
+        <CardAction icon={<BookmarkPlus size={15} />} label="Salvar como modelo" onClick={onSaveAsTemplate} />
+        <CardAction icon={<Share2 size={15} />} label="Copiar como texto" onClick={onShare} />
         <CardAction
-          icon={<Trash2 size={15} />}
-          label={confirming ? 'Confirmar?' : 'Apagar'}
+          icon={confirming ? <Check size={15} /> : <Trash2 size={15} />}
+          label={confirming ? 'Confirmar exclusão' : 'Apagar'}
           tone={confirming ? 'danger' : 'default'}
           onClick={onDelete}
         />
+      </div>
+    </Card>
+  );
+}
+
+function TemplateCard({
+  template,
+  onUse,
+  onDelete,
+}: {
+  template: ShoppingList;
+  onUse: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-start justify-between gap-3 px-4 pb-3 pt-3.5">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[15px] font-semibold tracking-[-0.01em]">{template.title}</h3>
+          <p className="mt-0.5 text-[12.5px] text-text-muted">
+            {pluralize(template.items.length, 'item', 'itens')}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex border-t border-border">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onUse}
+          className="flex-1 rounded-none border-r border-border font-semibold text-accent"
+        >
+          <Play size={14} />
+          Usar esta lista
+        </Button>
+        <CardAction icon={<Trash2 size={15} />} label="Apagar modelo" onClick={onDelete} />
       </div>
     </Card>
   );
@@ -215,14 +294,14 @@ function CardAction({
     <Button
       variant="ghost"
       size="sm"
+      aria-label={label}
       onClick={onClick}
       className={cn(
         'flex-1 rounded-none border-r border-border last:border-r-0',
-        tone === 'danger' && 'bg-danger-soft font-semibold text-danger',
+        tone === 'danger' && 'bg-danger-soft text-danger',
       )}
     >
       {icon}
-      {label}
     </Button>
   );
 }

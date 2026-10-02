@@ -27,7 +27,7 @@ export interface ShoppingList {
   id: string;
   title: string;
   market?: string;
-  status: 'ativa' | 'concluida' | 'arquivada';
+  status: 'ativa' | 'concluida' | 'arquivada' | 'modelo';
   items: Item[];
   createdAt: string;
   updatedAt: string;

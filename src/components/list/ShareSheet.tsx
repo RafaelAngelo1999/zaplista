@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Field, Input, Sheet } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/Toast';
 import { createShare, fetchShare, shareLink } from '@/lib/share';
+import { requestNotificationPermission } from '@/lib/notify';
 import { copyToClipboard, cn } from '@/lib/cn';
 import { useLists } from '@/store/lists';
 import type { SyncState } from '@/hooks/useShareSync';
@@ -56,6 +57,7 @@ export function ShareSheet({
     try {
       const remote = await createShare(list.title, list.items);
       linkShare(list.id, remote);
+      requestNotificationPermission();
       toast.show('Lista compartilhada — mande o código para a outra pessoa');
     } catch (err) {
       toast.show(err instanceof Error ? err.message : 'Não consegui compartilhar agora');
@@ -72,6 +74,7 @@ export function ShareSheet({
       const remote = await fetchShare(joinCode);
       const newId = createList(remote.title, remote.items);
       linkShare(newId, remote);
+      requestNotificationPermission();
       toast.show(`Entrou em "${remote.title}" — sincronizando`);
       setJoinCode('');
       onOpenChange(false);

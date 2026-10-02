@@ -99,6 +99,20 @@ export function recurrenceOf(
   return history.get(productKey(name)) ?? null;
 }
 
+export function recurringNotInList(
+  history: Map<string, ProductHistory>,
+  currentItems: Item[],
+  options: { minTimes?: number; limit?: number } = {},
+): ProductHistory[] {
+  const { minTimes = 3, limit = 6 } = options;
+  const present = new Set(currentItems.map((item) => productKey(item.name)));
+
+  return [...history.values()]
+    .filter((entry) => entry.timesBought >= minTimes && !present.has(entry.key))
+    .sort((a, b) => b.timesBought - a.timesBought)
+    .slice(0, limit);
+}
+
 export interface MonthSummary {
   key: string;
   lists: number;

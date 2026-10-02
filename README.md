@@ -1,15 +1,25 @@
 # ZapLista
 
-Transforma a bagunça de uma conversa do WhatsApp numa lista de supermercado
-organizada por corredor. Você cola o texto cru, a IA (ChatGPT, Claude, Gemini)
-faz a análise e devolve um JSON, o app cuida do resto.
+Marca de um lado, aparece do outro na hora. Compartilha a lista com quem for
+com você no mercado — cada um num corredor, as marcações sincronizam em
+tempo real. E a lista nasce sozinha: cola a conversa do WhatsApp, a IA
+organiza por corredor, você só confere.
 
 Roda no navegador, instala como app (PWA), sem conta e sem backend próprio —
 o compartilhamento em tempo real fala direto com o Supabase pelo client SDK.
 
-<!-- prints aqui -->
+![ZapLista](screenshots/banner.png)
 
 ## Funcionalidades
+
+### Compra em dupla, em tempo real
+Compartilha a lista com um código de 6 letras (ou QR code / link) — sem
+cadastro, sem app separado. Quem entra com o código vê a mesma lista, e os
+itens marcados aparecem dos dois lados quase na hora, via Supabase Realtime.
+Cada um pode estar num corredor diferente do mercado marcando itens ao mesmo
+tempo sem pisar no risco do outro: o merge resolve conflito por item, não por
+lista inteira. Funciona offline também — continua gravando local e
+sincroniza assim que a conexão volta.
 
 ### Importar do WhatsApp
 Cola a conversa inteira (com hora e nome de quem mandou) e copia um prompt
@@ -19,15 +29,6 @@ resposta cortada — nunca recusa o arquivo, corrige o que dá e avisa o resto.
 Antes de aplicar, mostra um preview com quantos itens vieram, quantos
 precisam de revisão e quantos já estão na lista, com opção de mesclar,
 substituir ou criar uma lista nova.
-
-### Compra em dupla, em tempo real
-Compartilha a lista com um código de 6 letras (ou QR code / link) — quem
-entra com o código vê a mesma lista, e os itens marcados aparecem dos dois
-lados quase na hora, via Supabase Realtime. Cada um pode estar num corredor
-diferente do mercado marcando itens ao mesmo tempo sem pisar no risco do
-outro: o merge resolve conflito por item, não por lista inteira. Funciona
-offline também — continua gravando local e sincroniza assim que a conexão
-volta.
 
 ### Lista organizada do seu jeito
 Agrupa por corredor, por tipo ou A–Z — a ordem dos corredores segue o
@@ -46,6 +47,23 @@ gasto por mês e por corredor.
 ### Feito para o mercado
 Modo mercado: tela de alto contraste, fonte maior, tela sempre acesa. Instala
 como app na tela inicial (PWA). Backup/restore em JSON e tema claro/escuro.
+
+## Prints
+
+<table>
+<tr>
+<td width="25%"><img src="screenshots/compartilhar.png" alt="Sheet de compartilhamento com código de 6 letras e QR code para a outra pessoa entrar" /><br/><sub>Compra em dupla — código, link e QR, sincronizado em tempo real</sub></td>
+<td width="25%"><img src="screenshots/importar.png" alt="Tela de importar, com o JSON da IA colado e o preview pronto para aplicar" /><br/><sub>Importar — cola o JSON da IA e revisa antes de aplicar</sub></td>
+<td width="25%"><img src="screenshots/lista-preco.png" alt="Lista ativa agrupada por corredor, com preço por item e total da compra" /><br/><sub>Lista por corredor, com preço e total</sub></td>
+<td width="25%"><img src="screenshots/dashboard.png" alt="Dashboard com gasto por mês e distribuição por corredor" /><br/><sub>Dashboard de gasto e histórico</sub></td>
+</tr>
+<tr>
+<td width="25%"><img src="screenshots/lista-ativa.png" alt="Lista recém-importada, ainda sem nenhum item marcado" /><br/><sub>Lista recém-importada</sub></td>
+<td width="25%"><img src="screenshots/historico.png" alt="Histórico com a lista em andamento e uma compra encerrada" /><br/><sub>Histórico de compras</sub></td>
+<td width="25%"><img src="screenshots/lista-dark.png" alt="Lista ativa em tema escuro" /><br/><sub>Tema escuro</sub></td>
+<td width="25%"></td>
+</tr>
+</table>
 
 ## Como se usa
 

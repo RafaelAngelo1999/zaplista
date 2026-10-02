@@ -1,10 +1,20 @@
 import * as React from 'react';
-import { Download, Monitor, Moon, ShieldAlert, Sun, Upload } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Monitor,
+  Moon,
+  ShieldAlert,
+  Sun,
+  Upload,
+} from 'lucide-react';
 import { Button, Card, Field, Input, SegmentedControl, Switch } from '@/components/ui/primitives';
 import { PageHeader } from '@/pages/ListaAtiva';
 import { useToast } from '@/components/ui/Toast';
 import { useSettings } from '@/store/settings';
 import { useLists } from '@/store/lists';
+import { cn } from '@/lib/cn';
 import type { Settings, ShoppingList } from '@/types';
 
 export function Config() {
@@ -81,6 +91,64 @@ export function Config() {
             checked={settings.marketMode}
             onChange={settings.setMarketMode}
           />
+        </Card>
+
+        <Card className="space-y-1 p-4">
+          <div className="mb-1">
+            <h2 className="text-[14.5px] font-semibold tracking-[-0.01em]">Ordem dos corredores</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
+              Ajuste para bater com o caminho que você faz no seu mercado.
+            </p>
+          </div>
+
+          <ul className="divide-y divide-border rounded-[var(--radius-control)] border border-border">
+            {settings.aisleOrder.map((name, index) => {
+              const isOutros = name === 'Outros';
+              const nextIsOutros = settings.aisleOrder[index + 1] === 'Outros';
+
+              return (
+                <li key={name} className="flex items-center gap-2 px-3 py-2">
+                  <span
+                    className={cn(
+                      'tnum w-5 text-center text-[11px] font-semibold',
+                      isOutros ? 'text-text-faint' : 'text-accent',
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className={cn('flex-1 text-[13.5px]', isOutros && 'text-text-faint')}>
+                    {name}
+                  </span>
+                  {!isOutros ? (
+                    <div className="flex gap-0.5">
+                      <button
+                        type="button"
+                        aria-label={`Mover ${name} para cima`}
+                        disabled={index === 0}
+                        onClick={() => settings.moveAisle(name, 'up')}
+                        className="grid size-7 place-items-center rounded-[7px] text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                      >
+                        <ChevronUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Mover ${name} para baixo`}
+                        disabled={nextIsOutros}
+                        onClick={() => settings.moveAisle(name, 'down')}
+                        className="grid size-7 place-items-center rounded-[7px] text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-30"
+                      >
+                        <ChevronDown size={15} />
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+
+          <Button variant="ghost" size="sm" onClick={settings.resetAisleOrder} className="mt-1">
+            Restaurar ordem padrão
+          </Button>
         </Card>
 
         <Card className="p-4">

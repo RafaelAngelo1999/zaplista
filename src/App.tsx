@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ClipboardList, Download, History, BarChart3, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ToastProvider, useToast } from '@/components/ui/Toast';
 import { InstallAutoPrompt } from '@/components/ui/InstallPrompt';
 import { applyDocumentFlags, useSettings } from '@/store/settings';
 import { usePwa } from '@/store/pwa';
+import { useActiveList } from '@/store/lists';
+import { useShareSync } from '@/hooks/useShareSync';
+import { requestNotificationPermission, showLocalNotification } from '@/lib/notify';
 import { ListaAtiva } from '@/pages/ListaAtiva';
 import { Importar } from '@/pages/Importar';
 
@@ -37,6 +40,7 @@ export default function App() {
   return (
     <ToastProvider>
       <PwaUpdateBridge />
+      <ShareSyncBridge />
       <InstallAutoPrompt />
       <div className="mx-auto flex min-h-dvh w-full max-w-[640px] flex-col">
         <main className="flex-1 pb-[calc(env(safe-area-inset-bottom)+68px)]">
@@ -57,6 +61,34 @@ export default function App() {
       </div>
     </ToastProvider>
   );
+}
+
+function ShareSyncBridge() {
+  const list = useActiveList();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const locationRef = React.useRef(location.pathname);
+  locationRef.current = location.pathname;
+
+  const remoteId = list?.remoteId;
+  React.useEffect(() => {
+    if (remoteId) requestNotificationPermission();
+  }, [remoteId]);
+
+  useShareSync(list, (message) => {
+    if (document.hidden) {
+      showLocalNotification('Lista atualizada', message);
+      return;
+    }
+    if (locationRef.current === '/') {
+      toast.show(message);
+      return;
+    }
+    toast.show(message, { label: 'Ver', run: () => navigate('/') });
+  });
+
+  return null;
 }
 
 function PwaUpdateBridge() {

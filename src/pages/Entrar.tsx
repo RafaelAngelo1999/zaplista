@@ -5,6 +5,7 @@ import { Button, Card, Field, Input } from '@/components/ui/primitives';
 import { PageHeader } from '@/pages/ListaAtiva';
 import { useToast } from '@/components/ui/Toast';
 import { fetchShare } from '@/lib/share';
+import { requestNotificationPermission } from '@/lib/notify';
 import { useLists } from '@/store/lists';
 
 export function Entrar() {
@@ -27,6 +28,7 @@ export function Entrar() {
         const remote = await fetchShare(value);
         const id = createList(remote.title, remote.items);
         linkShare(id, remote);
+        requestNotificationPermission();
         toast.show(`Entrou em "${remote.title}" — sincronizando`);
         navigate('/');
       } catch (err) {

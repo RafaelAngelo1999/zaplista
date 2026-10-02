@@ -25,13 +25,21 @@ function byPending(a: Item, b: Item): number {
   return byName(a, b);
 }
 
-export function sortFlat(items: Item[], mode: SortMode): Item[] {
+export function aislePosition(name: string, order: string[]): number {
+  const idx = order.indexOf(name);
+  return idx === -1 ? order.length : idx;
+}
+
+export function sortFlat(items: Item[], mode: SortMode, aisleOrder: string[]): Item[] {
   const sorted = [...items];
   if (mode === 'alpha') return sorted.sort(byPending);
 
   return sorted.sort((a, b) => {
     if (a.checked !== b.checked) return a.checked ? 1 : -1;
-    if (mode === 'aisle' && a.aisleOrder !== b.aisleOrder) return a.aisleOrder - b.aisleOrder;
+    if (mode === 'aisle') {
+      const diff = aislePosition(a.aisle, aisleOrder) - aislePosition(b.aisle, aisleOrder);
+      if (diff !== 0) return diff;
+    }
     if (mode === 'category') {
       const cmp = collator.compare(a.category, b.category);
       if (cmp !== 0) return cmp;
@@ -40,7 +48,7 @@ export function sortFlat(items: Item[], mode: SortMode): Item[] {
   });
 }
 
-export function groupItems(items: Item[], mode: SortMode): ItemGroup[] {
+export function groupItems(items: Item[], mode: SortMode, aisleOrder: string[]): ItemGroup[] {
   if (mode === 'alpha') {
     return [
       {
@@ -53,16 +61,15 @@ export function groupItems(items: Item[], mode: SortMode): ItemGroup[] {
     ];
   }
 
-  const buckets = new Map<string, { label: string; order: number; items: Item[] }>();
+  const buckets = new Map<string, { label: string; items: Item[] }>();
 
   for (const item of items) {
     const label = mode === 'aisle' ? item.aisle : item.category;
     const key = normalizeKey(label);
-    const order = mode === 'aisle' ? item.aisleOrder : 0;
 
     const bucket = buckets.get(key);
     if (bucket) bucket.items.push(item);
-    else buckets.set(key, { label, order, items: [item] });
+    else buckets.set(key, { label, items: [item] });
   }
 
   const groups: ItemGroup[] = [...buckets.entries()].map(([key, bucket]) => ({
@@ -79,9 +86,8 @@ export function groupItems(items: Item[], mode: SortMode): ItemGroup[] {
     if (aDone !== bDone) return aDone ? 1 : -1;
 
     if (mode === 'aisle') {
-      const aOrder = a.items[0]?.aisleOrder ?? 99;
-      const bOrder = b.items[0]?.aisleOrder ?? 99;
-      if (aOrder !== bOrder) return aOrder - bOrder;
+      const diff = aislePosition(a.label, aisleOrder) - aislePosition(b.label, aisleOrder);
+      if (diff !== 0) return diff;
     }
     return collator.compare(a.label, b.label);
   });
