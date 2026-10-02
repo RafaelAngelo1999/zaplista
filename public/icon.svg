@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1d9d6c"/>
+      <stop offset="100%" stop-color="#157a54"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- balão de mensagem (o "zap") virando lista -->
+  <path d="M146 384 L168 330 L222 330 Z" fill="#ffffff"/>
+  <rect x="96" y="120" width="320" height="214" rx="40" fill="#ffffff"/>
+
+  <!-- itens: dois marcados, um pendente -->
+  <g>
+    <rect x="132" y="150" width="40" height="40" rx="10" fill="#1d9d6c"/>
+    <path d="M142 170 L154 182 L172 156" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="188" y="164" width="188" height="12" rx="6" fill="#c7d0ce"/>
+
+    <rect x="132" y="210" width="40" height="40" rx="10" fill="#1d9d6c"/>
+    <path d="M142 230 L154 242 L172 216" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="188" y="224" width="150" height="12" rx="6" fill="#c7d0ce"/>
+
+    <rect x="132" y="270" width="40" height="40" rx="10" fill="none" stroke="#1d9d6c" stroke-width="8"/>
+    <rect x="188" y="284" width="170" height="12" rx="6" fill="#1f3a30"/>
+  </g>
+</svg>

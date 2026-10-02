@@ -1,0 +1,228 @@
+import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Copy, History as HistoryIcon, Share2, Trash2, Undo2 } from 'lucide-react';
+import { cn, copyToClipboard } from '@/lib/cn';
+import { AmountDisplay, Button, Card, Chip, EmptyState } from '@/components/ui/primitives';
+import { PageHeader } from '@/pages/ListaAtiva';
+import { useToast } from '@/components/ui/Toast';
+import { useAllLists, useLists } from '@/store/lists';
+import { statsOf } from '@/lib/sort';
+import { groupItems } from '@/lib/sort';
+import { fullDate, pluralize, timeAgo } from '@/lib/format';
+import { qtyLabel } from '@/lib/format';
+import type { ShoppingList } from '@/types';
+
+export function Historico() {
+  const lists = useAllLists();
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const setActive = useLists((state) => state.setActive);
+  const deleteList = useLists((state) => state.deleteList);
+  const duplicateList = useLists((state) => state.duplicateList);
+  const reopenList = useLists((state) => state.reopenList);
+
+  const [confirming, setConfirming] = React.useState<string | null>(null);
+
+  const active = lists.filter((list) => list.status === 'ativa');
+  const finished = lists.filter((list) => list.status !== 'ativa');
+
+  if (!lists.length) {
+    return (
+      <>
+        <PageHeader title="Histórico" />
+        <EmptyState
+          icon={<HistoryIcon size={22} />}
+          title="Nenhuma lista ainda"
+          description="Suas compras ficam guardadas aqui, no seu navegador. Dá para duplicar uma antiga para comprar de novo."
+        />
+      </>
+    );
+  }
+
+  const shareAsText = async (list: ShoppingList) => {
+    const groups = groupItems(list.items, 'aisle');
+    const text = [
+      `*${list.title}*`,
+      '',
+      ...groups.flatMap((group) => [
+        `*${group.label}*`,
+        ...group.items.map(
+          (item) => `${item.checked ? '✅' : '▫️'} ${item.name} — ${qtyLabel(item.qty, item.unit)}`,
+        ),
+        '',
+      ]),
+    ].join('\n');
+
+    const ok = await copyToClipboard(text.trim());
+    toast.show(ok ? 'Lista copiada — cole no WhatsApp' : 'Não consegui copiar');
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Histórico"
+        subtitle={`${lists.length} ${pluralize(lists.length, 'lista guardada', 'listas guardadas')} neste navegador`}
+      />
+
+      <div className="space-y-3.5 px-3.5 py-3.5">
+        {active.length ? (
+          <section className="space-y-2">
+            <p className="label px-1">Em andamento</p>
+            {active.map((list) => (
+              <ListCard
+                key={list.id}
+                list={list}
+                confirming={confirming === list.id}
+                onOpen={() => {
+                  setActive(list.id);
+                  navigate('/');
+                }}
+                onDuplicate={() => {
+                  duplicateList(list.id);
+                  toast.show('Lista duplicada');
+                  navigate('/');
+                }}
+                onShare={() => shareAsText(list)}
+                onDelete={() => {
+                  if (confirming !== list.id) {
+                    setConfirming(list.id);
+                    window.setTimeout(() => setConfirming(null), 4000);
+                    return;
+                  }
+                  deleteList(list.id);
+                  setConfirming(null);
+                  toast.show('Lista apagada');
+                }}
+              />
+            ))}
+          </section>
+        ) : null}
+
+        {finished.length ? (
+          <section className="space-y-2">
+            <p className="label px-1">Compras encerradas</p>
+            {finished.map((list) => (
+              <ListCard
+                key={list.id}
+                list={list}
+                confirming={confirming === list.id}
+                onOpen={() => {
+                  reopenList(list.id);
+                  navigate('/');
+                }}
+                onDuplicate={() => {
+                  duplicateList(list.id);
+                  toast.show('Nova lista criada a partir desta');
+                  navigate('/');
+                }}
+                onShare={() => shareAsText(list)}
+                onDelete={() => {
+                  if (confirming !== list.id) {
+                    setConfirming(list.id);
+                    window.setTimeout(() => setConfirming(null), 4000);
+                    return;
+                  }
+                  deleteList(list.id);
+                  setConfirming(null);
+                  toast.show('Lista apagada');
+                }}
+              />
+            ))}
+          </section>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function ListCard({
+  list,
+  confirming,
+  onOpen,
+  onDuplicate,
+  onShare,
+  onDelete,
+}: {
+  list: ShoppingList;
+  confirming: boolean;
+  onOpen: () => void;
+  onDuplicate: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+}) {
+  const stats = statsOf(list.items);
+  const finished = list.status !== 'ativa';
+
+  return (
+    <Card className="overflow-hidden">
+      <button type="button" onClick={onOpen} className="block w-full px-4 pb-3 pt-3.5 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-[15px] font-semibold tracking-[-0.01em]">{list.title}</h3>
+            <p className="mt-0.5 text-[12.5px] text-text-muted">
+              {finished
+                ? `Encerrada ${timeAgo(list.completedAt)} · ${fullDate(list.completedAt)}`
+                : `Atualizada ${timeAgo(list.updatedAt)}`}
+            </p>
+          </div>
+          {stats.spent > 0 ? <AmountDisplay value={stats.spent} size="md" /> : null}
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <Chip tone={finished ? 'default' : 'accent'}>
+            <span className="tnum">
+              {stats.done}/{stats.total}
+            </span>{' '}
+            {pluralize(stats.total, 'item', 'itens')}
+          </Chip>
+          {list.market ? <Chip tone="default">{list.market}</Chip> : null}
+          {!finished && stats.pending > 0 ? (
+            <Chip tone="muted">
+              <span className="tnum">{stats.pending}</span> faltando
+            </Chip>
+          ) : null}
+        </div>
+      </button>
+
+      <div className="flex border-t border-border">
+        <CardAction icon={finished ? <Undo2 size={15} /> : undefined} label={finished ? 'Reabrir' : 'Abrir'} onClick={onOpen} />
+        <CardAction icon={<Copy size={15} />} label="Duplicar" onClick={onDuplicate} />
+        <CardAction icon={<Share2 size={15} />} label="Copiar" onClick={onShare} />
+        <CardAction
+          icon={<Trash2 size={15} />}
+          label={confirming ? 'Confirmar?' : 'Apagar'}
+          tone={confirming ? 'danger' : 'default'}
+          onClick={onDelete}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function CardAction({
+  icon,
+  label,
+  onClick,
+  tone = 'default',
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onClick}
+      className={cn(
+        'flex-1 rounded-none border-r border-border last:border-r-0',
+        tone === 'danger' && 'bg-danger-soft font-semibold text-danger',
+      )}
+    >
+      {icon}
+      {label}
+    </Button>
+  );
+}
